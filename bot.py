@@ -8,10 +8,12 @@ class BibleBot(discord.Bot):
     async def on_ready(self):
         print(f'Logged in as {self.user.name} ({self.user.id})')
 
-bot = BibleBot() # might need to add intents
+bot = BibleBot(intents=discord.Intents.default())
+
 
 cogs_list = [
     'utility',
+    'bible',
 ]
 
 for cogs in cogs_list:
