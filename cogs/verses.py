@@ -157,7 +157,7 @@ class VerseCommands(commands.Cog):
             )
             final_message = f"> {chapter_as_bold} "
         else:
-            final_message = f"> "
+            final_message = "> "
 
         # Loop through the range of verses and add them to the final message
         for i in range(start, stop + 1):
@@ -340,7 +340,7 @@ class VerseCommands(commands.Cog):
             )
             final_message = f"> {chapter_as_bold} "
         else:
-            final_message = f"> "
+            final_message = "> "
 
         # Loop through the range of verses and add them to the final message
         for i in range(start, stop + 1):
