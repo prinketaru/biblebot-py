@@ -4,64 +4,58 @@ import requests
 import json
 import globals
 
-versions = [
-    "KJV",
-    "ESV",
-    "NIV",
-    "NLT",
-    "NKJV",
-    "NASB",
-    "ASV",
+# Supported Bible versions
+BIBLE_VERSIONS = [
+    "KJV", "ESV", "NIV", "NLT", "NKJV", "NASB", "ASV"
 ]
 
-
-# biblegateway button for verses
-class BGButton(discord.ui.Button):
+# BibleGateway Button for verses
+class BibleGatewayButton(discord.ui.Button):
     def __init__(self, book: str, chapter: str, verse: str, version: str):
         super().__init__(
             label="BibleGateway",
             style=discord.ButtonStyle.link,
-            url=f"https://www.biblegateway.com/passage/?search={book}+{chapter}%3A{verse}&version={version}",
+            url=f"https://www.biblegateway.com/passage/?search={book}+{chapter}%3A{verse}&version={version}"
         )
 
-
-# verse cog
+# Verse Commands Cog
 class VerseCommands(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    verse = discord.SlashCommandGroup("verse", "Commands related to Bible verses")
+    verse_group = discord.SlashCommandGroup("verse", "Commands related to Bible verses")
 
     # /verse search command
-    @verse.command(description="Find a Bible verse.")
+    @verse_group.command(description="Find a Bible verse.")
     @discord.option(
-        name="verse",
-        type=discord.SlashCommandOptionType.string,
-        description="The verse to search for",
+        name="verse", 
+        type=discord.SlashCommandOptionType.string, 
+        description="The verse to search for"
     )
     @discord.option(
-        name="version",
-        type=discord.SlashCommandOptionType.string,
-        description="The version of the Bible to search in (Default: ESV).",
-        default="ESV",
-        choices=versions,
+        name="version", 
+        type=discord.SlashCommandOptionType.string, 
+        description="The Bible version (Default: ESV)", 
+        default="ESV", 
+        choices=BIBLE_VERSIONS
     )
     async def search(self, ctx, verse: str, version: str):
         await ctx.defer()
+        
+        # Step 1: Fetch verse reference
+        reference_url = f"https://jsonbible.com/search/ref.php?keyword={verse}"
+        reference_response = requests.get(reference_url)
 
-        reference_response = requests.get(
-            f"https://jsonbible.com//search/ref.php?keyword={verse}"
-        )
         try:
             reference_data = reference_response.json()
         except json.decoder.JSONDecodeError:
             await ctx.send_followup(
-                "The verse you requested does not exist. Please try again.",
-                ephemeral=True,
+                "The verse you requested does not exist. Please try again.", 
+                ephemeral=True
             )
             return
 
-        # Build the JSON payload as a dictionary
+        # Step 2: Build and send the verse request
         json_payload = {
             "book": reference_data["book"],
             "bid": reference_data["bid"],
@@ -70,330 +64,128 @@ class VerseCommands(commands.Cog):
             "verse": reference_data["verse"],
             "found": reference_data["found"],
             "next_chapter": reference_data["next_chapter"],
-            "version": version.lower(),
+            "version": version.lower()
         }
 
-        # Convert the dictionary to a JSON string
-        json_string = json.dumps(json_payload)
+        verse_response_url = f"https://jsonbible.com/search/verses.php?json={json.dumps(json_payload)}"
+        verse_response = requests.get(verse_response_url)
 
-        # Make the request using the JSON string
-        verse_response = requests.get(
-            f"https://jsonbible.com/search/verses.php?json={json_string}"
-        )
         try:
             verse_data = verse_response.json()
         except json.decoder.JSONDecodeError:
             await ctx.send_followup(
-                "The verse you requested does not exist. Please try again.",
-                ephemeral=True,
+                "The verse you requested does not exist. Please try again.", 
+                ephemeral=True
             )
             return
 
-        # handle case where there is only one verse requested
+        # Step 3: Format and send the response
+        await self.send_verse_embed(ctx, verse_data, version)
+
+    async def send_verse_embed(self, ctx, verse_data: dict, version: str):
+        """
+        Helper function to send an embedded message with the verse data.
+        """
         if "-" not in verse_data["verses"]:
-            verse_as_superscript = (
-                verse_data["verses"]
-                .replace("1", "¹")
-                .replace("2", "²")
-                .replace("3", "³")
-                .replace("4", "⁴")
-                .replace("5", "⁵")
-                .replace("6", "⁶")
-                .replace("7", "⁷")
-                .replace("8", "⁸")
-                .replace("9", "⁹")
-                .replace("0", "⁰")
+            text = verse_data["text"]
+            embed = self.create_embed(
+                book=verse_data["book"],
+                chapter=verse_data["chapter"],
+                verse=verse_data["verses"],
+                version=version,
+                text=text
             )
-            if verse_data["verses"] == "1":
-                chapter_as_bold = (
-                    verse_data["chapter"]
-                    .replace("0", "**０**")
-                    .replace("1", "**１**")
-                    .replace("2", "**２**")
-                    .replace("3", "**３**")
-                    .replace("4", "**４**")
-                    .replace("5", "**５**")
-                    .replace("6", "**６**")
-                    .replace("7", "**７**")
-                    .replace("8", "**８**")
-                    .replace("9", "**９**")
-                )
-                final_message = (
-                    f"> {chapter_as_bold} [{verse_as_superscript}](https://www.biblegateway.com/passage/?search={verse_data['book']}+{verse_data['chapter']}%3A{verse_data['verses']}&version={version}){verse_data['text']}"
-                )
-            else:
-                final_message = f"> [{verse_as_superscript}](https://www.biblegateway.com/passage/?search={verse_data['book']}+{verse_data['chapter']}%3A{verse_data['verses']}&version={version}){verse_data['text']}"
-
-            embed = discord.Embed(
-                description=final_message,
-            )
-            embed.set_author(
-                name=f'{verse_data["book"]} {verse_data["chapter"]}:{
-                         verse_data["verses"]} | {verse_data["version"]}',
-                url=f"https://www.biblegateway.com/passage/?search={verse_data['book']}+{verse_data['chapter']}%3A{verse_data['verses']}&version={version}",
-            )
-
             await ctx.send_followup(embed=embed)
-
-            return
-
-        # Get a range of verses
-        start, stop = map(int, verse_data["verses"].split("-"))
-
-        # replace the chapter number with stylized text
-        if start == 1:
-            chapter_as_bold = (
-                verse_data["chapter"]
-                .replace("0", "**０**")
-                .replace("1", "**１**")
-                .replace("2", "**２**")
-                .replace("3", "**３**")
-                .replace("4", "**４**")
-                .replace("5", "**５**")
-                .replace("6", "**６**")
-                .replace("7", "**７**")
-                .replace("8", "**８**")
-                .replace("9", "**９**")
-            )
-            final_message = f"> {chapter_as_bold} "
         else:
-            final_message = "> "
+            start, stop = map(int, verse_data["verses"].split("-"))
+            await self.send_verse_range(ctx, verse_data, version, start, stop)
 
-        # Loop through the range of verses and add them to the final message
-        for i in range(start, stop + 1):
+    async def send_verse_range(self, ctx, verse_data: dict, version: str, start: int, stop: int):
+        """
+        Helper function to handle and send a range of verses.
+        """
+        final_message = "> "
+        if start == 1:
+            final_message += self.format_bold_chapter(verse_data["chapter"])
+
+        for verse_number in range(start, stop + 1):
             json_payload = {
-                "book": reference_data["book"],
-                "bid": reference_data["bid"],
-                "chapter": reference_data["chapter"],
-                "chapter_roman": reference_data["chapter_roman"],
-                "verse": i,
-                "found": reference_data["found"],
-                "next_chapter": reference_data["next_chapter"],
-                "version": version,
+                "book": verse_data["book"],
+                "chapter": verse_data["chapter"],
+                "verse": verse_number,
+                "version": version.lower(),
             }
+            verse_url = f"https://jsonbible.com/search/verses.php?json={json.dumps(json_payload)}"
+            single_verse_response = requests.get(verse_url)
+            single_verse_data = single_verse_response.json()
 
-            json_string = json.dumps(json_payload)
-
-            single_verse_response = requests.get(
-                f"https://jsonbible.com/search/verses.php?json={json_string}"
-            )
-            try:
-                single_verse_data = single_verse_response.json()
-            except json.decoder.JSONDecodeError:
-                await ctx.send_followup(
-                    "The verse you requested does not exist. Please try again.",
-                    ephemeral=True,
-                )
-                return
-
-            # Handle the case where the verse data is invalid
-            if verse_data.get("Verse") is None or verse_data["verses"] == "1-0":
-                await ctx.send_followup("The verse you requested does not exist.")
-                return
-
-            # stylize verse and add to final message
-            verse_as_superscript = (
-                str(i)
-                .replace("1", "¹")
-                .replace("2", "²")
-                .replace("3", "³")
-                .replace("4", "⁴")
-                .replace("5", "⁵")
-                .replace("6", "⁶")
-                .replace("7", "⁷")
-                .replace("8", "⁸")
-                .replace("9", "⁹")
-                .replace("0", "⁰")
-            )
-            final_message += (
-                f'[{verse_as_superscript}](https://www.biblegateway.com/passage/?search={verse_data["book"]}%20{verse_data["chapter"]}%3A{i}&version={version})'
-                + single_verse_data["text"]
-                + " "
-            )
+            formatted_verse = self.format_superscript(str(verse_number))
+            final_message += f"[{formatted_verse}](https://www.biblegateway.com/passage/?search={verse_data['book']}+{verse_data['chapter']}%3A{verse_number}&version={version}) {single_verse_data['text']} "
 
         if len(final_message) > 4096:
-            await ctx.send_followup(
-                "The passage is too long to send in one message. Please try a shorter verse."
-            )
+            await ctx.send_followup("The passage is too long to send. Try a shorter verse.")
             return
 
-        embed = discord.Embed(
-            description=final_message,
-        )
+        embed = discord.Embed(description=final_message)
         embed.set_author(
-            name=f'{verse_data["book"]} {verse_data["chapter"]}:{
-                         verse_data["verses"]} | {verse_data["version"]}',
-            url=f"https://www.biblegateway.com/passage/?search={verse_data['book']}+{verse_data['chapter']}%3A{verse_data['verses']}&version={version}",
+            name=f"{verse_data['book']} {verse_data['chapter']}:{start}-{stop} | {version}",
+            url=f"https://www.biblegateway.com/passage/?search={verse_data['book']}+{verse_data['chapter']}%3A{start}-{stop}&version={version}"
         )
-
         await ctx.send_followup(embed=embed)
 
-    # end verse search command
+    def format_superscript(self, verse: str) -> str:
+        """
+        Converts digits in the verse number to superscript.
+        """
+        return verse.translate(str.maketrans("0123456789", "⁰¹²³⁴⁵⁶⁷⁸⁹"))
+
+    def format_bold_chapter(self, chapter: str) -> str:
+        """
+        Formats chapter numbers in bold.
+        """
+        return chapter.translate(str.maketrans("0123456789", "０１２３４５６７８９")).replace("0", "**０**")
+
+    def create_embed(self, book: str, chapter: str, verse: str, version: str, text: str) -> discord.Embed:
+        """
+        Helper function to create a Discord embed for a Bible verse.
+        """
+        formatted_verse = self.format_superscript(verse)
+        verse_url = f"https://www.biblegateway.com/passage/?search={book}+{chapter}%3A{verse}&version={version}"
+        embed = discord.Embed(description=f"> [{formatted_verse}]({verse_url}) {text}")
+        embed.set_author(
+            name=f"{book} {chapter}:{verse} | {version}",
+            url=verse_url
+        )
+        return embed
 
     # /verse daily command
-    @verse.command(description="Get the verse of the day.")
+    @verse_group.command(description="Get the verse of the day.")
     @discord.option(
-        name="version",
-        type=discord.SlashCommandOptionType.string,
-        description="The version of the Bible to get the daily verse in (Default: ESV).",
-        default="ESV",
-        choices=versions,
+        name="version", 
+        type=discord.SlashCommandOptionType.string, 
+        description="Bible version for daily verse (Default: ESV)", 
+        default="ESV", 
+        choices=BIBLE_VERSIONS
     )
     async def daily(self, ctx, version: str):
         await ctx.defer()
 
-        verse = (
-            globals.daily_verse.get("book")
-            + " "
-            + globals.daily_verse.get("chapter")
-            + ":"
-            + globals.daily_verse.get("verse")
-        )
-
-        reference_response = requests.get(
-            f"https://jsonbible.com//search/ref.php?keyword={verse}"
-        )
-        reference_data = reference_response.json()
+        daily_verse = f"{globals.daily_verse['book']} {globals.daily_verse['chapter']}:{globals.daily_verse['verse']}"
+        reference_url = f"https://jsonbible.com/search/ref.php?keyword={daily_verse}"
+        reference_data = requests.get(reference_url).json()
 
         json_payload = {
             "book": reference_data["book"],
-            "bid": reference_data["bid"],
             "chapter": reference_data["chapter"],
             "verse": reference_data["verse"],
-            "chapter_roman": reference_data["chapter_roman"],
-            "found": reference_data["found"],
-            "next_chapter": reference_data["next_chapter"],
-            "version": version.lower(),
+            "version": version.lower()
         }
 
-        json_string = json.dumps(json_payload)
-        verse_response = requests.get(
-            f"https://jsonbible.com/search/verses.php?json={json_string}"
-        )
-        verse_data = verse_response.json()
+        verse_url = f"https://jsonbible.com/search/verses.php?json={json.dumps(json_payload)}"
+        verse_data = requests.get(verse_url).json()
 
-        # handle case where only one verse is requested
-        if "-" not in verse_data["verses"]:
-            verse_as_superscript = (
-                verse_data["verses"]
-                .replace("1", "¹")
-                .replace("2", "²")
-                .replace("3", "³")
-                .replace("4", "⁴")
-                .replace("5", "⁵")
-                .replace("6", "⁶")
-                .replace("7", "⁷")
-                .replace("8", "⁸")
-                .replace("9", "⁹")
-                .replace("0", "⁰")
-            )
-            if verse_data["verses"] == 1:
-                chapter_as_bold = (
-                    verse_data["chapter"]
-                    .replace("0", "**０**")
-                    .replace("1", "**１**")
-                    .replace("2", "**２**")
-                    .replace("3", "**３**")
-                    .replace("4", "**４**")
-                    .replace("5", "**５**")
-                    .replace("6", "**６**")
-                    .replace("7", "**７**")
-                    .replace("8", "**８**")
-                    .replace("9", "**９**")
-                )
-                final_message = (
-                    f"> {chapter_as_bold} [{verse_as_superscript}](https://www.biblegateway.com/passage/?search={verse_data['book']}+{verse_data['chapter']}%3A{verse_data['verses']}&version={version}){verse_data['text']}"
-                )
-            else:
-                final_message = f"> [{verse_as_superscript}](https://www.biblegateway.com/passage/?search={verse_data['book']}+{verse_data['chapter']}%3A{verse_data['verses']}&version={version}){verse_data['text']}"
+        await self.send_verse_embed(ctx, verse_data, version)
 
-            embed = discord.Embed(
-                description=final_message,
-            )
-            embed.set_author(
-                name=f'{verse_data["book"]} {verse_data["chapter"]}:{
-                         verse_data["verses"]} | {verse_data["version"]}',
-                url=f"https://www.biblegateway.com/passage/?search={verse_data['book']}+{verse_data['chapter']}%3A{verse_data['verses']}&version={version}",
-            )
-
-            await ctx.send_followup(embed=embed)
-
-            return
-
-        # Get a range of verses
-        start, stop = map(int, verse_data["verses"].split("-"))
-
-        # replace the chapter number with stylized text
-        if start == 1:
-            chapter_as_bold = (
-                verse_data["chapter"]
-                .replace("0", "**０**")
-                .replace("1", "**１**")
-                .replace("2", "**２**")
-                .replace("3", "**３**")
-                .replace("4", "**４**")
-                .replace("5", "**５**")
-                .replace("6", "**６**")
-                .replace("7", "**７**")
-                .replace("8", "**８**")
-                .replace("9", "**９**")
-            )
-            final_message = f"> {chapter_as_bold} "
-        else:
-            final_message = "> "
-
-        # Loop through the range of verses and add them to the final message
-        for i in range(start, stop + 1):
-            json_payload = {
-                "book": reference_data["book"],
-                "bid": reference_data["bid"],
-                "chapter": reference_data["chapter"],
-                "chapter_roman": reference_data["chapter_roman"],
-                "verse": i,
-                "found": reference_data["found"],
-                "next_chapter": reference_data["next_chapter"],
-                "version": version,
-            }
-
-            json_string = json.dumps(json_payload)
-
-            single_verse_response = requests.get(
-                f"https://jsonbible.com/search/verses.php?json={json_string}"
-            )
-            single_verse_data = single_verse_response.json()
-
-            # get i as a superscript
-            verse_as_superscript = (
-                str(i)
-                .replace("1", "¹")
-                .replace("2", "²")
-                .replace("3", "³")
-                .replace("4", "⁴")
-                .replace("5", "⁵")
-                .replace("6", "⁶")
-                .replace("7", "⁷")
-                .replace("8", "⁸")
-                .replace("9", "⁹")
-                .replace("0", "⁰")
-            )
-
-            final_message += (
-                f'[{verse_as_superscript}](https://www.biblegateway.com/passage/?search={verse_data["book"]}%20{verse_data["chapter"]}%3A{i}&version={version})'
-                + single_verse_data["text"]
-                + " "
-            )
-
-        embed = discord.Embed(
-            description=final_message,
-        )
-        embed.set_author(
-            name=f'{verse_data["book"]} {verse_data["chapter"]}:{
-                         verse_data["verses"]} | {verse_data["version"]}',
-            url=f"https://www.biblegateway.com/passage/?search={verse_data['book']}+{verse_data['chapter']}%3A{verse_data['verses']}&version={version}",
-        )
-
-        await ctx.send_followup(embed=embed)
-
-
+# Bot setup function
 def setup(bot):
     bot.add_cog(VerseCommands(bot))
