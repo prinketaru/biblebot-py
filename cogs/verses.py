@@ -133,13 +133,15 @@ class VerseCommands(commands.Cog):
         )
         await ctx.send_followup(embed=embed)
 
-    def format_superscript(self, verse: str) -> str:
+    @staticmethod
+    def format_superscript(verse: str) -> str:
         """
         Converts digits in the verse number to superscript.
         """
         return verse.translate(str.maketrans("0123456789", "⁰¹²³⁴⁵⁶⁷⁸⁹"))
 
-    def format_bold_chapter(self, chapter: str) -> str:
+    @staticmethod
+    def format_bold_chapter(chapter: str) -> str:
         """
         Formats chapter numbers in bold.
         """
@@ -176,8 +178,12 @@ class VerseCommands(commands.Cog):
 
         json_payload = {
             "book": reference_data["book"],
+            "bid": reference_data["bid"],
             "chapter": reference_data["chapter"],
+            "chapter_roman": reference_data["chapter_roman"],
             "verse": reference_data["verse"],
+            "found": reference_data["found"],
+            "next_chapter": reference_data["next_chapter"],
             "version": version.lower()
         }
 
