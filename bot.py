@@ -7,7 +7,6 @@ import random
 import globals
 import json
 
-del os.environ['TOKEN']
 dotenv.load_dotenv()
 
 # create a new class that inherits from discord.Bot
