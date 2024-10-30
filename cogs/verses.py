@@ -9,15 +9,6 @@ BIBLE_VERSIONS = [
     "KJV", "ESV", "NIV", "NLT", "NKJV", "NASB", "ASV"
 ]
 
-# BibleGateway Button for verses
-class BibleGatewayButton(discord.ui.Button):
-    def __init__(self, book: str, chapter: str, verse: str, version: str):
-        super().__init__(
-            label="BibleGateway",
-            style=discord.ButtonStyle.link,
-            url=f"https://www.biblegateway.com/passage/?search={book}+{chapter}%3A{verse}&version={version}"
-        )
-
 # Verse Commands Cog
 class VerseCommands(commands.Cog):
     def __init__(self, bot):
@@ -120,16 +111,19 @@ class VerseCommands(commands.Cog):
             single_verse_data = single_verse_response.json()
 
             formatted_verse = self.format_superscript(str(verse_number))
-            final_message += f"[{formatted_verse}](https://www.biblegateway.com/passage/?search={verse_data['book']}+{verse_data['chapter']}%3A{verse_number}&version={version}) {single_verse_data['text']} "
+            book = verse_data["book"].replace(" ", "+")
+            final_message += f"[{formatted_verse}](https://www.biblegateway.com/passage/?search={book}+{verse_data['chapter']}%3A{verse_number}&version={version}) {single_verse_data['text']} "
 
         if len(final_message) > 4096:
             await ctx.send_followup("The passage is too long to send. Try a shorter verse.")
             return
 
         embed = discord.Embed(description=final_message)
+        book = verse_data["book"].replace(" ", "+"),
+        print(book)
         embed.set_author(
             name=f"{verse_data['book']} {verse_data['chapter']}:{start}-{stop} | {version}",
-            url=f"https://www.biblegateway.com/passage/?search={verse_data['book']}+{verse_data['chapter']}%3A{start}-{stop}&version={version}"
+            url=f"https://www.biblegateway.com/passage/?search={book}+{verse_data['chapter']}%3A{start}-{stop}&version={version}"
         )
         await ctx.send_followup(embed=embed)
 
@@ -152,6 +146,7 @@ class VerseCommands(commands.Cog):
         Helper function to create a Discord embed for a Bible verse.
         """
         formatted_verse = self.format_superscript(verse)
+        book = book.replace(" ", "+")
         verse_url = f"https://www.biblegateway.com/passage/?search={book}+{chapter}%3A{verse}&version={version}"
         embed = discord.Embed(description=f"> [{formatted_verse}]({verse_url}) {text}")
         embed.set_author(
