@@ -9,7 +9,6 @@ import json
 from pymongo import MongoClient
 
 # load env
-del os.environ['TOKEN']
 dotenv.load_dotenv()
 
 # connect to db
