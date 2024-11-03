@@ -6,8 +6,16 @@ import os
 import random
 import globals
 import json
+from pymongo import MongoClient
 
+# load env
+del os.environ['TOKEN']
 dotenv.load_dotenv()
+
+# connect to db
+MONGO_URI = os.getenv('MONGO_URI')
+client = MongoClient(MONGO_URI)
+db = client['Cluster0']
 
 # create a new class that inherits from discord.Bot
 class BibleBot(discord.Bot):
@@ -18,6 +26,9 @@ class BibleBot(discord.Bot):
 
 # create an instance of the BibleBot class
 bot = BibleBot(intents=discord.Intents.default(), default_command_integration_types={discord.IntegrationType.user_install, discord.IntegrationType.guild_install})
+
+# add the db to the bot
+bot.db = db
 
 # get daily verse everyday at 0:00 UTC
 with open('daily_verses.json') as f:
@@ -64,6 +75,7 @@ async def daily_verse_loop():
 cogs_list = [
     'utility',
     'verses',
+    'users',
 ]
 
 for cogs in cogs_list:

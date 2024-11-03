@@ -6,13 +6,14 @@ import globals
 
 # Supported Bible versions
 BIBLE_VERSIONS = [
-    "KJV", "ESV", "NIV", "NLT", "NKJV", "NASB", "ASV"
+    "KJV", "ESV", "NIV", "NLT", "NKJV", "NASB", "ASV", "AMP", "Darby"
 ]
 
 # Verse Commands Cog
 class VerseCommands(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
+        self.collection = bot.db['users']
 
     verse_group = discord.SlashCommandGroup("verse", "Commands related to Bible verses")
 
@@ -27,7 +28,7 @@ class VerseCommands(commands.Cog):
         name="version", 
         type=discord.SlashCommandOptionType.string, 
         description="The Bible version (Default: ESV)", 
-        default="ESV", 
+        default="None", 
         choices=BIBLE_VERSIONS
     )
     async def search(self, ctx, verse: str, version: str):
@@ -45,6 +46,10 @@ class VerseCommands(commands.Cog):
                 ephemeral=True
             )
             return
+
+        # get the user's default Bible version
+        if version == "None":
+            version = self.get_bible_version(ctx.author.id)
 
         # Step 2: Build and send the verse request
         json_payload = {
@@ -119,11 +124,9 @@ class VerseCommands(commands.Cog):
             return
 
         embed = discord.Embed(description=final_message)
-        book = verse_data["book"].replace(" ", "+"),
-        print(book)
         embed.set_author(
             name=f"{verse_data['book']} {verse_data['chapter']}:{start}-{stop} | {version}",
-            url=f"https://www.biblegateway.com/passage/?search={book}+{verse_data['chapter']}%3A{start}-{stop}&version={version}"
+            url=f"https://www.biblegateway.com/passage/?search={verse_data['book'].replace(' ', '+')}+{verse_data['chapter']}%3A{start}-{stop}&version={version}"
         )
         await ctx.send_followup(embed=embed)
 
@@ -146,22 +149,32 @@ class VerseCommands(commands.Cog):
         Helper function to create a Discord embed for a Bible verse.
         """
         formatted_verse = self.format_superscript(verse)
-        book = book.replace(" ", "+")
-        verse_url = f"https://www.biblegateway.com/passage/?search={book}+{chapter}%3A{verse}&version={version}"
+        verse_url = f"https://www.biblegateway.com/passage/?search={book.replace(' ', '+')}+{chapter}%3A{verse}&version={version}"
         embed = discord.Embed(description=f"> [{formatted_verse}]({verse_url}) {text}")
         embed.set_author(
             name=f"{book} {chapter}:{verse} | {version}",
             url=verse_url
         )
         return embed
+    
+    def get_bible_version(self, discord_id: int) -> str:
+        """
+        Helper function to get the user's default Bible version.
+        """
+        user_data = self.collection.find_one({"discord_id": discord_id})
+        
+        if user_data is None:
+            return "ESV"
+
+        return user_data.get("default_version", "ESV")
 
     # /verse daily command
     @verse_group.command(description="Get the verse of the day.")
     @discord.option(
         name="version", 
         type=discord.SlashCommandOptionType.string, 
-        description="Bible version for daily verse (Default: ESV)", 
-        default="ESV", 
+        description="Bible version for daily verse (Default: ESV)",
+        default="None",
         choices=BIBLE_VERSIONS
     )
     async def daily(self, ctx, version: str):
@@ -170,6 +183,10 @@ class VerseCommands(commands.Cog):
         daily_verse = f"{globals.daily_verse['book']} {globals.daily_verse['chapter']}:{globals.daily_verse['verse']}"
         reference_url = f"https://jsonbible.com/search/ref.php?keyword={daily_verse}"
         reference_data = requests.get(reference_url).json()
+
+        # Get the user's default Bible version
+        if version == "None":
+            version = self.get_bible_version(ctx.author.id)
 
         json_payload = {
             "book": reference_data["book"],
