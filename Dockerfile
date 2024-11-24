@@ -1,6 +1,12 @@
-FROM python:3
-COPY requirements.txt /app
+# Use an official Python runtime as a parent image
+FROM python:latest
+# Set the working directory in the container
 WORKDIR /app
-RUN pip install -r requirements.txt
-COPY . .
-CMD [ "python3", "bot.py" ]
+# Copy the requirements file into the container
+COPY requirements.txt /app/requirements.txt
+# Install any Python dependencies
+RUN pip install --no-cache-dir -r requirements.txt
+# Copy the rest of the bot's code into the container
+COPY . /app
+# Run the bot
+CMD ["python3", "bot.py"]
